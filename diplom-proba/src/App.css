@@ -1,0 +1,197 @@
+/**************************************************************
+ * Базовые настройки
+ **************************************************************/
+ :root {
+  --primary-color: #0284c7;      /* Основной цвет */
+  --primary-hover: #0369a1;
+  --primary-active: #075985;
+  --bg-color: #f1f5f9;
+  --panel-bg: #ffffff;
+  --text-color: #374151;
+  --heading-color: #1f2937;
+  --border-color: #e2e8f0;
+  --font-family: "Segoe UI", Arial, sans-serif;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-color);
+  font-family: var(--font-family);
+  box-sizing: border-box;
+  color: var(--text-color);
+}
+
+*, *::before, *::after {
+  box-sizing: inherit;
+}
+
+/**************************************************************
+ * Общий контейнер приложения
+ **************************************************************/
+.App {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.App h1 {
+  margin: 0 0 12px 0;
+  text-align: center;
+  font-size: 24px;
+  color: var(--heading-color);
+}
+
+/**************************************************************
+ * Основной блок с изображением (слева) и панелью (справа)
+ **************************************************************/
+.content {
+  display: flex;
+  gap: 30px;
+  margin-top: 16px;
+  justify-content: center; /* по центру */
+  align-items: flex-start;
+}
+
+/**************************************************************
+ * Блок изображения (ImageCanvas)
+ **************************************************************/
+.image-canvas-container {
+  position: relative;
+  display: inline-block;
+  background-color: #000;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.image-canvas-container img {
+  display: block;
+  max-width: 700px;
+  max-height: 85vh;
+}
+
+.image-canvas-container svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/**************************************************************
+ * Лупа (magnifier)
+ **************************************************************/
+.magnifier {
+  position: absolute;
+  border: 2px solid #999;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  pointer-events: none;
+  z-index: 999;
+}
+
+/**************************************************************
+ * Боковая панель (SidePanel)
+ **************************************************************/
+.SidePanel {
+  width: 260px;              /* ширина, как на скриншоте */
+  background-color: var(--panel-bg);
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  padding: 16px;
+}
+
+/* Заголовок "Управление" */
+.SidePanel h2 {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+  color: var(--heading-color);
+}
+
+/* Заголовки внутри панели (например, "Построить 3D", "Полосы", "Точки") */
+.SidePanel h3 {
+  margin: 16px 0 8px;
+  font-size: 16px;
+  color: var(--heading-color);
+}
+
+/**************************************************************
+ * Кнопки в боковой панели (вертикально, одна под другой)
+ **************************************************************/
+.SidePanel button {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #ffffff;
+  background: var(--primary-color);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-bottom: 8px; /* отступ между кнопками */
+  transition: background 0.2s, transform 0.2s;
+}
+
+.SidePanel button:hover {
+  background: var(--primary-hover);
+}
+
+.SidePanel button:active {
+  background: var(--primary-active);
+  transform: scale(0.97);
+}
+
+.SidePanel button:focus {
+  outline: none;
+}
+
+/**************************************************************
+ * Радиокнопки (список "Полосы")
+ **************************************************************/
+.SidePanel label {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.SidePanel input[type="radio"] {
+  margin-right: 8px;
+  accent-color: var(--primary-color);
+}
+
+/**************************************************************
+ * Контейнер для точек (прокрутка)
+ **************************************************************/
+.points-container {
+  max-height: 150px; /* или 200px — подберите сами */
+  overflow-y: auto;  /* прокрутка по вертикали */
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 6px;
+  background-color: #f9fafb;
+}
+
+
+/* Другие стили остаются без изменений ... */
+
+/**************************************************************
+ * Стили для точек в боковой панели
+ **************************************************************/
+ .point {
+  padding: 4px 6px;
+  margin-bottom: 4px;
+  border-radius: 4px;
+  background-color: #f3f4f6; /* базовый светлый фон */
+  color: var(--text-color);
+  font-size: 13px;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+/* Стили для точек выбранной полосы */
+.point.highlighted {
+  background-color: var(--primary-color); /* основный цвет */
+  color: #ffffff; /* белый текст */
+  font-weight: bold;
+  border: 1px solid var(--primary-hover);
+}
