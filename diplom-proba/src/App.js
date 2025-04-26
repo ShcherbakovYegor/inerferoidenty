@@ -4,105 +4,11 @@ import './App.css';
 import ImageCanvas from './Components/ImageCanvas';
 import SidePanel from './Components/SidePanel';
 import Plot3D from './Components/Plot3D';
+import SlicePlots from './Components/SlicePlots';
 import {
   buildPolynomialRow,
   polynomialRegression2D,
 } from './Utils/mathUtils';
-
-/** 
- * Вычисляет выпуклую оболочку (convex hull) массива точек [{x, y}, ...].
- * Возвращает массив вершин hull в порядке обхода.
- * Алгоритм "Gift Wrapping" (Jarvis march) для простоты. 
- */
-function computeConvexHull(points) {
-  if (points.length < 3) {
-    return points.map(p => [p.x, p.y]);
-  }
-  // Удаляем дубликаты
-  const unique = [];
-  const seen = new Set();
-  for (let p of points) {
-    const key = `${p.x},${p.y}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      unique.push(p);
-    }
-  }
-  if (unique.length < 3) {
-    return unique.map(p => [p.x, p.y]);
-  }
-
-  // Ищем самую левую точку (minX), если несколько - берём любую
-  let leftmostIndex = 0;
-  for (let i = 1; i < unique.length; i++) {
-    if (unique[i].x < unique[leftmostIndex].x) {
-      leftmostIndex = i;
-    }
-  }
-
-  const hull = [];
-  let currentIndex = leftmostIndex;
-  let nextIndex;
-  
-  do {
-    hull.push([unique[currentIndex].x, unique[currentIndex].y]);
-    nextIndex = (currentIndex + 1) % unique.length;
-    for (let i = 0; i < unique.length; i++) {
-      // Определяем ориентацию (current -> i -> next)
-      const orientation = orientationTest(
-        unique[currentIndex], unique[i], unique[nextIndex]
-      );
-      // Если i больше "левее", чем next, то обновляем nextIndex
-      if (orientation < 0) {
-        nextIndex = i;
-      }
-      // Если collinear, берём ту что дальше
-      else if (orientation === 0) {
-        // Проверим, кто дальше от current
-        if (distSq(unique[currentIndex], unique[i]) > distSq(unique[currentIndex], unique[nextIndex])) {
-          nextIndex = i;
-        }
-      }
-    }
-    currentIndex = nextIndex;
-  } while (currentIndex !== leftmostIndex);
-
-  return hull;
-}
-
-// Тест ориентации трёх точек (p, q, r)
-// < 0 => p->q->r делает поворот вправо (clockwise)
-// > 0 => поворот влево (counter-clockwise)
-// = 0 => точки на одной линии (collinear)
-function orientationTest(p, q, r) {
-  const val = (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
-  return val;
-}
-function distSq(a, b) {
-  return (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
-}
-
-/** 
- * Проверка, лежит ли точка (x, y) внутри (или на краю) выпуклого многоугольника hull.
- * hull — массив [[x1, y1], [x2, y2], ...], упорядоченных по обходу.
- * Используем простой "ray casting" или "winding number".
- * Здесь — упрощённый ray casting.
- */
-function isPointInPolygon(x, y, hull) {
-  let count = 0;
-  for (let i = 0; i < hull.length; i++) {
-    const j = (i + 1) % hull.length;
-    const x1 = hull[i][0], y1 = hull[i][1];
-    const x2 = hull[j][0], y2 = hull[j][1];
-
-    // Проверяем пересечение луча вправо от (x,y) с отрезком (x1,y1)-(x2,y2)
-    if (((y1 <= y && y < y2) || (y2 <= y && y < y1)) && (x < (x2 - x1) * (y - y1) / (y2 - y1) + x1)) {
-      count++;
-    }
-  }
-  // Точка внутри, если count нечетно
-  return (count % 2) === 1;
-}
 
 function App() {
   // --------------------------
@@ -142,6 +48,7 @@ function App() {
 
   // 3D-график
   const [plotData, setPlotData] = useState(null);
+  const [sliceData, setSliceData] = useState(null);
 
   // --------------------------
   // Удаление точки по клику
@@ -176,6 +83,8 @@ function App() {
     return points;
   };
 
+
+
   const handleInterpolate = () => {
     if (currentStripId === null) {
       alert('Пожалуйста, выберите полосу для интерполяции');
@@ -203,7 +112,7 @@ function App() {
       const distance = Math.sqrt(dx * dx + dy * dy);
 
       // Пример: каждые 10 пикселей вставить точку
-      const numPoints = Math.max(1, Math.floor(distance / 10));
+      const numPoints = Math.max(1, Math.floor(distance / 5));
       const interpolated = interpolatePoints(p1, p2, numPoints);
 
       newPoints.push(...interpolated);
@@ -371,6 +280,14 @@ function App() {
     }
   };
 
+  // проверяет, лежит ли точка внутри данного круга
+const isInsideCircle = (x, y, circle) => {
+  const dx = x - circle.centerX;
+  const dy = y - circle.centerY;
+  return dx * dx + dy * dy <= circle.radius * circle.radius;
+};
+
+
   const handleImageLoad = ({ target }) => {
     setImageDimensions({
       width: target.naturalWidth,
@@ -384,72 +301,59 @@ function App() {
   // Клик по изображению
   // --------------------------
   const handleImageClick = (event) => {
-    if (editingCircle) {
-      return;
-    }
+    if (editingCircle) return;
     if (!coordinateSystemRef.current) return;
-
+  
     const x = Math.round(event.nativeEvent.offsetX);
     const y = Math.round(event.nativeEvent.offsetY);
     setMousePos({ x, y });
-
+  
     if (circleDrawingStage === 'circle1-center') {
-      const newCircle = { centerX: x, centerY: y, radius: 50 };
-      setPendingCircle(newCircle);
+      setPendingCircle({ centerX: x, centerY: y, radius: 50 });
       setEditingCircle('circle1');
-    } else if (circleDrawingStage === 'circle2-center') {
-      const newCircle = { centerX: x, centerY: y, radius: 50 };
-      setPendingCircle(newCircle);
+    }
+    else if (circleDrawingStage === 'circle2-center') {
+      setPendingCircle({ centerX: x, centerY: y, radius: 50 });
       setEditingCircle('circle2');
-    } else if (circleDrawingStage === 'points-drawing') {
+    }
+    else if (circleDrawingStage === 'points-drawing') {
       if (currentStripId === null) {
-        alert('Сначала добавьте и выберите полосу (справа).');
+        alert('Сначала добавьте и выберите полосу.');
         return;
       }
-      if (isPointInIntersection(x, y)) {
-        const currentStrip = strips.find((strip) => strip.id === currentStripId);
-        if (!currentStrip) return;
-        const isDuplicate = currentStrip.points.some(
-          (point) => point.x === x && point.y === y
-        );
-        if (!isDuplicate) {
-          const newPoint = {
-            x, y, z: 0,
-            stripId: currentStripId,
-            isInterpolated: false
-          };
-          const updatedStrips = strips.map((strip) =>
-            strip.id === currentStripId
-              ? { ...strip, points: [...strip.points, newPoint] }
-              : strip
-          );
-          setStrips(updatedStrips);
-          setUndoStack([
-            ...undoStack,
-            {
-              type: 'add_points',
-              stripId: currentStripId,
-              addedPoints: [newPoint],
-            },
-          ]);
+  
+      // если оба круга уже заданы — проверяем попадание в их пересечение
+      if (circle1 && circle2) {
+        if (
+          !isInsideCircle(x, y, circle1) ||
+          !isInsideCircle(x, y, circle2)
+        ) {
+          // можно просто return или показать сообщение
+          alert('Точка должна быть внутри области пересечения двух кругов.');
+          return;
         }
-      } else {
-        alert('Точка вне рабочей зоны (не попадает в пересечение кругов).');
       }
+  
+      const current = strips.find(s => s.id === currentStripId);
+      if (!current) return;
+      const duplicate = current.points.some(p => p.x === x && p.y === y);
+      if (duplicate) return;
+  
+      const newPoint = { x, y, z: 0, stripId: currentStripId, isInterpolated: false };
+      const updated = strips.map(s =>
+        s.id === currentStripId
+          ? { ...s, points: [...s.points, newPoint] }
+          : s
+      );
+      setStrips(updated);
+      setUndoStack([...undoStack, {
+        type: 'add_points',
+        stripId: currentStripId,
+        addedPoints: [newPoint],
+      }]);
     }
   };
-
-  const isPointInsideCircle = (x, y, circle) => {
-    if (!circle) return false;
-    const dx = x - circle.centerX;
-    const dy = y - circle.centerY;
-    return dx * dx + dy * dy <= circle.radius * circle.radius;
-  };
-
-  const isPointInIntersection = (x, y) => {
-    return isPointInsideCircle(x, y, circle1) && isPointInsideCircle(x, y, circle2);
-  };
-
+  
   // --------------------------
   // Выбор полосы
   // --------------------------
@@ -598,102 +502,147 @@ function App() {
   // --------------------------
   // Построение 3D-графика
   // --------------------------
-  const handleBuild3D = (degree) => {
+  const handleBuildAll = (degree) => {
     const allPoints = strips.flatMap((s) => s.points);
     if (allPoints.length < 3) {
-      alert('Слишком мало точек (нужно минимум 3 для оболочки и регрессии).');
+      alert("Слишком мало точек для регрессии");
       return;
     }
-
-    // 1) Строим полиномиальную регрессию
-    const coeff = polynomialRegression2D(allPoints, degree);
-    if (!coeff) {
-      alert('Не удалось вычислить регрессию (матрица вырождена?).');
-      return;
-    }
-
-    // 2) Находим выпуклую оболочку (для x,y)
-    const hullPoints = computeConvexHull(allPoints); 
-    // hullPoints = [[x1,y1],[x2,y2],...]
-
-    // 3) Соберём min/max, чтобы построить сетку
+  
+    // 1. Находим границы данных и определяем центр и радиус.
     const xs = allPoints.map((p) => p.x);
     const ys = allPoints.map((p) => p.y);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-
-    const steps = 30;
-    const stepX = (maxX - minX) / (steps - 1);
-    const stepY = (maxY - minY) / (steps - 1);
-
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+  
+    // Если задан круг (например, circle1), используем его центр и радиус,
+    // иначе берем центр всего изображения и радиус как половину меньшей стороны.
+    const centerX = circle1 ? circle1.centerX : (minX + maxX) / 2;
+    const centerY = circle1 ? circle1.centerY : (minY + maxY) / 2;
+    const R = circle1 ? circle1.radius : Math.min(maxX - minX, maxY - minY) / 2;
+  
+    // 2. Сдвигаем все точки так, чтобы центр стал (0,0).
+    const shiftedPoints = allPoints.map((p) => ({
+      x: p.x - centerX,
+      y: p.y - centerY,
+      z: p.z,
+    }));
+  
+    // 3. Выполняем полиномиальную регрессию по сдвинутым координатам.
+    const coeff = polynomialRegression2D(shiftedPoints, degree);
+    if (!coeff) {
+      alert("Не удалось вычислить регрессию");
+      return;
+    }
+    // Убираем наклон (клин) — обнуляем коэффициенты линейных членов.
+    if (degree >= 1) {
+      coeff[1] = 0; // коэффициент при x
+      coeff[2] = 0; // коэффициент при y
+    }
+  
+    // 4. Строим равномерную сетку в диапазоне от -R до +R (по осям X и Y в сдвинутых координатах).
+    const steps = 303;
     const xVals = [];
     const yVals = [];
+    const step = (2 * R) / (steps - 1);
     for (let i = 0; i < steps; i++) {
-      xVals.push(minX + i * stepX);
-      yVals.push(minY + i * stepY);
+      xVals.push(-R + i * step);
+      yVals.push(-R + i * step);
     }
-
-    // 4) Формируем Z, пропуская всё, что не внутри hull
+  
+    // 5. Формируем матрицу Z.
+    // Если точка (x,y) лежит вне круга (x^2 + y^2 > R^2), запишем NaN.
     const Z = [];
     for (let j = 0; j < steps; j++) {
       const row = [];
       for (let i = 0; i < steps; i++) {
-        const xx = xVals[i];
-        const yy = yVals[j];
-
-        // Проверяем, внутри ли выпуклой оболочки
-        if (!isPointInPolygon(xx, yy, hullPoints)) {
+        const xVal = xVals[i];
+        const yVal = yVals[j];
+        if (xVal * xVal + yVal * yVal > R * R) {
           row.push(NaN);
-          continue;
+        } else {
+          const rowPoly = buildPolynomialRow(xVal, yVal, degree);
+          let zVal = 0;
+          for (let k = 0; k < rowPoly.length; k++) {
+            zVal += rowPoly[k] * coeff[k];
+          }
+          row.push(zVal);
         }
-
-        // Вычисляем z через полиномиальную регрессию
-        const rowPoly = buildPolynomialRow(xx, yy, degree);
-        let zVal = 0;
-        for (let k = 0; k < rowPoly.length; k++) {
-          zVal += rowPoly[k] * coeff[k];
-        }
-        row.push(zVal);
       }
       Z.push(row);
     }
-
-    // Формируем surface
+  
+    // 6. Определяем минимальное и максимальное значение z (игнорируя NaN)
+    let zArray = [];
+    for (let j = 0; j < steps; j++) {
+      for (let i = 0; i < steps; i++) {
+        const val = Z[j][i];
+        if (!isNaN(val)) {
+          zArray.push(val);
+        }
+      }
+    }
+    const zMin = Math.min(...zArray);
+    const zMax = Math.max(...zArray);
+  
+    // 7. Создаем surface‑трейс с черными контурными линиями по оси z,
+    //    используя step = 1 (параметры start, end и size для контуров).
     const surfaceTrace = {
-      type: 'surface',
+      type: "surface",
       x: xVals,
       y: yVals,
       z: Z,
-      colorscale: 'Jet',
+      colorscale: "Jet",
+      opacity: 1,
       contours: {
         z: {
           show: true,
-          project: {
-            z: false
-          }
+          usecolormap: false,  // отключаем использование colormap для линий
+          color: "black",      // цвет линий – черный
+          width: 2,            // толщина линий
+          start: Math.floor(zMin),   // начинаем с ближайшего целого ниже минимума
+          end: Math.ceil(zMax),      // заканчиваем ближайшим целым выше максимума
+          size: 1,             // шаг между уровнями равен 1
+          project: { z: true }
         }
-      },
-      opacity: 0.9
+      }
     };
-
-    // Если точки не нужны — не добавляем scatterTrace
+  
     setPlotData([surfaceTrace]);
+    const idx = [
+      Math.floor(steps * 0.25),
+      Math.floor(steps * 0.5),
+      Math.floor(steps * 0.75),
+    ];
+ 
+    const xSlices = idx.map(j => ({
+      label: `y = ${yVals[j].toFixed(0)}`,
+      x: [...xVals],
+      z: [...Z[j]],
+    }));
+ 
+    const ySlices = idx.map(i => ({
+      label: `x = ${xVals[i].toFixed(0)}`,
+      x: [...yVals],
+      z: Z.map(row => row[i]),
+    }));
+ 
+    setSliceData({ xSlices, ySlices });
   };
+  
 
-  const handleCoordinateMouseMove = (event) => {
-    const coordinateSystemEl = coordinateSystemRef.current;
-    if (!coordinateSystemEl) return;
-    const rect = coordinateSystemEl.getBoundingClientRect();
-    const offsetX = Math.round(event.clientX - rect.left);
-    const offsetY = Math.round(event.clientY - rect.top);
+  const handleCoordinateMouseMove = (e) => {
+    const rect = coordinateSystemRef.current.getBoundingClientRect();
+    // НЕ округляем!
+    const offsetX = e.nativeEvent.offsetX;
+    const offsetY = e.nativeEvent.offsetY;
     setMousePos({ x: offsetX, y: offsetY });
     setMagnifierPos({
-      left: event.clientX + 10,
-      top: event.clientY + 10,
+      left: e.clientX + 10,
+      top:  e.clientY + 10,
     });
   };
+  
 
   // --------------------------
   // Управление полосами
@@ -795,7 +744,7 @@ function App() {
             handleInterpolate={handleInterpolate}
             handleDownloadPoints={handleDownloadPoints}
             handleLoadPointsFile={handleLoadPointsFile}
-            handleBuild3D={handleBuild3D}
+            handleBuildAll={handleBuildAll} 
             clearCurrentStrip={clearCurrentStrip}
             removeCurrentStrip={removeCurrentStrip}
           />
@@ -804,6 +753,10 @@ function App() {
 
       {/* 3D-график */}
       <Plot3D plotData={plotData} />
+
+      {sliceData && (
+        <SlicePlots xSlices={sliceData.xSlices} ySlices={sliceData.ySlices} />
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 // components/ImageCanvas.jsx
-import React from 'react';
+import React, { useRef, useEffect } from "react";
 
 function ImageCanvas({
   imageSrc,
@@ -10,7 +10,7 @@ function ImageCanvas({
   magnifierSize,
   magnifierZoom,
   handleImageLoad,
-  onImageClick,                // заменяем handleImageClick на onImageClick
+  onImageClick,
   coordinateSystemRef,
   circle1,
   circle2,
@@ -20,31 +20,92 @@ function ImageCanvas({
   handleRadiusMouseDown,
   renderCircle,
   strips,
-  currentStripId,             // новый пропс для выделения активной полосы
-  onPointClick,               // новый пропс для удаления точки при клике
-  setShowMagnifier,           // для переключения лупы
-  onCoordinateMouseMove,      // обновление позиции мыши внутри области
+  currentStripId,
+  onPointClick,
+  setShowMagnifier,
+  onCoordinateMouseMove,
+  orderedPoints,
 }) {
+  // ── 1. ВСЕ хуки здесь, до любого return ──
+  const lensRef = useRef(null);
 
+  useEffect(() => {
+    if (!showMagnifier || !coordinateSystemRef.current || !lensRef.current)
+      return;
+
+    const dst = lensRef.current;
+    dst.innerHTML = "";
+
+    // Клонируем всю coordinate-system
+    const clone = coordinateSystemRef.current.cloneNode(true);
+    clone.style.position = "absolute";
+    clone.style.top = `${-mousePos.y * magnifierZoom + magnifierSize / 2}px`;
+    clone.style.left = `${-mousePos.x * magnifierZoom + magnifierSize / 2}px`;
+    clone.style.transformOrigin = "top left";
+    clone.style.transform = `scale(${magnifierZoom})`;
+    clone.style.pointerEvents = "none";
+    dst.appendChild(clone);
+
+    // Добавляем вертикальную линию‑прицел
+    const v = document.createElement("div");
+    Object.assign(v.style, {
+      position: "absolute",
+      left: "50%",
+      top: "0",
+      width: "2px",
+      height: "100%",
+      background: "rgba(255,0,0,0.7)",
+      transform: "translateX(-50%)",
+      pointerEvents: "none",
+    });
+    dst.appendChild(v);
+
+    // Добавляем горизонтальную линию‑прицел
+    const h = document.createElement("div");
+    Object.assign(h.style, {
+      position: "absolute",
+      top: "50%",
+      left: "0",
+      width: "100%",
+      height: "2px",
+      background: "rgba(255,0,0,0.7)",
+      transform: "translateY(-50%)",
+      pointerEvents: "none",
+    });
+    dst.appendChild(h);
+  }, [
+    showMagnifier,
+    mousePos,
+    magnifierZoom,
+    magnifierSize,
+    coordinateSystemRef,
+  ]);
+
+  // ── 2. Ранний return, если нет картинки ──
   if (!imageSrc) return null;
+
+  // ── 3. Колбэк клика: используем "e", не глобальный event ──
+  const handleCanvasClick = (e) => {
+    e.stopPropagation();
+    // округляем внутри вашего onImageClick, если нужно
+    onImageClick(e);
+  };
 
   return (
     <div className="image-container">
-      {/* Контейнер, в котором лежит <img> и <svg> */}
       <div
         className="coordinate-system"
         ref={coordinateSystemRef}
         style={{
           width: imageDimensions.width,
           height: imageDimensions.height,
-          position: 'relative',
+          position: "relative",
         }}
         onMouseEnter={() => setShowMagnifier(true)}
         onMouseLeave={() => setShowMagnifier(false)}
         onMouseMove={onCoordinateMouseMove}
-        onClick={onImageClick}
+        onClick={handleCanvasClick}
       >
-        {/* Изображение */}
         <img
           src={imageSrc}
           alt="Uploaded"
@@ -58,15 +119,52 @@ function ImageCanvas({
           }}
         />
 
-        {/* SVG для кругов и точек */}
         <svg
           width={imageDimensions.width}
           height={imageDimensions.height}
           className="overlay-svg"
-          style={{ position: 'absolute', top: 0, left: 0 }}
+          style={{ position: "absolute", top: 0, left: 0 }}
         >
-          {renderCircle(circle1, 'blue')}
-          {renderCircle(circle2, 'green')}
+          {strips.map((strip) => {
+            const pts = strip.points;
+            if (!pts || pts.length < 2) return null;
+
+            const pointsForLine =
+              orderedPoints && strip.id === currentStripId
+                ? orderedPoints
+                : pts;
+
+            const groupsByZ = {};
+            pointsForLine.forEach((p) => {
+              const key = p.z != null ? p.z : "undef";
+              if (!groupsByZ[key]) groupsByZ[key] = [];
+              groupsByZ[key].push(p);
+            });
+
+            return Object.entries(groupsByZ).map(([zKey, grp], idx) => {
+              if (grp.length < 2) return null;
+              let finalGroup = grp;
+              const first = grp[0],
+                last = grp[grp.length - 1];
+              if (first.x === last.x && first.y === last.y) {
+                finalGroup = grp.slice(0, -1);
+              }
+              const d = finalGroup.map((p) => `${p.x},${p.y}`).join(" ");
+              const stroke = strip.id === currentStripId ? "blue" : "red";
+              return (
+                <polyline
+                  key={`pline-${strip.id}-${zKey}-${idx}`}
+                  points={d}
+                  fill="none"
+                  stroke={stroke}
+                  strokeWidth="1"
+                />
+              );
+            });
+          })}
+
+          {renderCircle(circle1, "blue")}
+          {renderCircle(circle2, "green")}
 
           {pendingCircle && (
             <>
@@ -74,36 +172,33 @@ function ImageCanvas({
                 cx={pendingCircle.centerX}
                 cy={pendingCircle.centerY}
                 r={pendingCircle.radius}
-                stroke={editingCircle === 'circle1' ? 'blue' : 'green'}
+                stroke={editingCircle === "circle1" ? "blue" : "green"}
                 strokeWidth="2"
                 fill="none"
               />
-              {/* Точка центра pendingCircle */}
               <circle
                 cx={pendingCircle.centerX}
                 cy={pendingCircle.centerY}
                 r="8"
                 fill="gray"
-                style={{ cursor: 'move' }}
+                style={{ cursor: "move" }}
                 onMouseDown={handleCenterMouseDown}
               />
-              {/* Точка для изменения радиуса */}
               <circle
                 cx={pendingCircle.centerX + pendingCircle.radius}
                 cy={pendingCircle.centerY}
                 r="8"
                 fill="gray"
-                style={{ cursor: 'ew-resize' }}
+                style={{ cursor: "ew-resize" }}
                 onMouseDown={handleRadiusMouseDown}
               />
             </>
           )}
 
-          {/* Отрисовка точек для всех полос */}
           {strips.map((strip) =>
-            strip.points.map((point, index) => (
+            strip.points.map((point, i) => (
               <circle
-                key={`${strip.id}-${index}`}
+                key={`${strip.id}-${i}`}
                 cx={point.x}
                 cy={point.y}
                 r={point.isInterpolated ? 1 : 1.5}
@@ -111,15 +206,13 @@ function ImageCanvas({
                   point.isInterpolated
                     ? "#888"
                     : currentStripId === strip.id
-                      ? "blue" // выделяем точки активной полосы синим
-                      : "red"
+                    ? "blue"
+                    : "red"
                 }
-                title={`Полоса ${strip.id}: (${point.x}, ${point.y}, z=${point.z})`}
+                title={`Полоса ${strip.id}: (${point.x},${point.y},z=${point.z})`}
                 onClick={(e) => {
-                  e.stopPropagation(); // чтобы не срабатывал onImageClick
-                  if (onPointClick) {
-                    onPointClick(strip.id, index);
-                  }
+                  e.stopPropagation();
+                  onPointClick(strip.id, i);
                 }}
               />
             ))
@@ -127,60 +220,24 @@ function ImageCanvas({
         </svg>
       </div>
 
-      {/* Лупа */}
       {showMagnifier && (
         <div
+          ref={lensRef}
           style={{
-            position: 'fixed',
+            position: "fixed",
             left: magnifierPos.left,
             top: magnifierPos.top,
             width: magnifierSize,
             height: magnifierSize,
-            border: '1px solid #ccc',
-            overflow: 'hidden',
-            pointerEvents: 'none',
+            border: "2px solid #ccc",
+            borderRadius: "50%",
+            overflow: "hidden",
+            pointerEvents: "none",
             zIndex: 9999,
-            background: '#eee',
+            background: "#fff",
+            boxShadow: "0 0 8px rgba(0,0,0,0.3)",
           }}
-        >
-          <div
-            style={{
-              width: '100%',
-              height: '100%',
-              backgroundImage: `url(${imageSrc})`,
-              backgroundRepeat: 'no-repeat',
-              backgroundSize: 
-                `${imageDimensions.width * magnifierZoom}px ${imageDimensions.height * magnifierZoom}px`,
-              backgroundPosition: 
-                `${-mousePos.x * magnifierZoom + magnifierSize / 2}px ${-mousePos.y * magnifierZoom + magnifierSize / 2}px`,
-              position: 'relative',
-            }}
-          >
-            {/* Прицел лупы */}
-            <div
-              style={{
-                position: 'absolute',
-                left: '50%',
-                top: '50%',
-                width: '2px',
-                height: '20px',
-                background: 'rgba(255, 0, 0, 0.7)',
-                transform: 'translate(-50%, -50%)'
-              }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                left: '50%',
-                top: '50%',
-                width: '20px',
-                height: '2px',
-                background: 'rgba(255, 0, 0, 0.7)',
-                transform: 'translate(-50%, -50%)'
-              }}
-            />
-          </div>
-        </div>
+        />
       )}
     </div>
   );

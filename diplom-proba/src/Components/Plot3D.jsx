@@ -9,16 +9,15 @@ const Plot3D = ({ plotData }) => {
     if (plotDiv.current && plotData) {
       const layout = {
         scene: {
-          // Равномерное масштабирование всех осей
           aspectmode: 'cube',
           xaxis: { title: 'X' },
           yaxis: { title: 'Y' },
           zaxis: { title: 'Z' },
-          // Начальное положение камеры:
           camera: {
-            eye: { x: 1.5, y: 1.5, z: 1.5 },
+            // "Вид сверху" (eye смотрит «сверху вниз» вдоль оси Z)
+            eye: { x: 0, y: 0, z: 2 },     // z побольше, x/y=0
             center: { x: 0, y: 0, z: 0 },
-            up: { x: 0, y: 0, z: 1 }
+            up: { x: 0, y: 1, z: 0 },      // направление "вверх" = ось Y
           }
         },
         margin: { l: 0, r: 0, t: 0, b: 0 }
@@ -26,8 +25,8 @@ const Plot3D = ({ plotData }) => {
 
       const config = {
         responsive: true,
-        scrollZoom: true,        // Масштабирование колесиком мыши
-        displayModeBar: true     // Отображение панели инструментов
+        scrollZoom: true,        
+        displayModeBar: true     
       };
 
       Plotly.newPlot(plotDiv.current, plotData, layout, config);
