@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/inerferoidenty/static/css/main.a103dc40.css",
-    "main.js": "/inerferoidenty/static/js/main.60d32447.js",
+    "main.css": "/inerferoidenty/static/css/main.eb51f4ca.css",
+    "main.js": "/inerferoidenty/static/js/main.b130adcd.js",
     "static/js/453.8f3d1941.chunk.js": "/inerferoidenty/static/js/453.8f3d1941.chunk.js",
     "index.html": "/inerferoidenty/index.html",
-    "main.a103dc40.css.map": "/inerferoidenty/static/css/main.a103dc40.css.map",
-    "main.60d32447.js.map": "/inerferoidenty/static/js/main.60d32447.js.map",
+    "main.eb51f4ca.css.map": "/inerferoidenty/static/css/main.eb51f4ca.css.map",
+    "main.b130adcd.js.map": "/inerferoidenty/static/js/main.b130adcd.js.map",
     "453.8f3d1941.chunk.js.map": "/inerferoidenty/static/js/453.8f3d1941.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.a103dc40.css",
-    "static/js/main.60d32447.js"
+    "static/css/main.eb51f4ca.css",
+    "static/js/main.b130adcd.js"
   ]
 }
